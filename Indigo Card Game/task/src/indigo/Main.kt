@@ -2,6 +2,7 @@ package indigo
 
 import java.util.*
 import kotlin.random.Random
+import kotlin.reflect.typeOf
 
 
 fun main() {
@@ -14,11 +15,11 @@ fun main() {
         answer = readLine()!!.uppercase(Locale.getDefault())
     } while (answer != "YES" && answer != "NO")
     if (answer == "YES") {
-        game.addPlayer(Human("Viktor"))
+        game.addPlayer(Human("Player"))
         game.addPlayer(Computer("Computer"))
     } else {
         game.addPlayer(Computer("Computer"))
-        game.addPlayer(Human("Viktor"))
+        game.addPlayer(Human("Player"))
     }
     game.start()
 }
@@ -68,20 +69,20 @@ fun shuffleCommand(deck: Deck) {
     println("Card deck is shuffled.")
 }
 
-enum class CardRank(val sign: String) {
-    ACE("A"),
-    TWO("2"),
-    THREE("3"),
-    FOUR("4"),
-    FIVE("5"),
-    SIX("6"),
-    SEVEN("7"),
-    EIGHT("8"),
-    NINE("9"),
-    TEN("10"),
-    JACK("J"),
-    QUEEN("Q"),
-    KING("K");
+enum class CardRank(val sign: String, val score: Int) {
+    ACE("A", 1),
+    TWO("2", 0),
+    THREE("3", 0),
+    FOUR("4", 0),
+    FIVE("5", 0),
+    SIX("6", 0),
+    SEVEN("7", 0),
+    EIGHT("8", 0),
+    NINE("9", 0),
+    TEN("10", 1),
+    JACK("J", 1),
+    QUEEN("Q", 1),
+    KING("K", 1);
     companion object {
         override fun toString(): String = values().joinToString(" ") { it.sign }
     }
@@ -99,6 +100,7 @@ enum class CardSuit(val sign: Char){
 
 abstract class Player(internal val name: String) {
     val hand: MutableList<Card> = mutableListOf()
+    val value: MutableList<Card> = mutableListOf()
     abstract fun choseCard():Card?
     fun showHand(){
         println(hand.joinToString(" ", prefix = "Cards in hand: "){ (hand.indexOf(it) + 1).toString() + ")" + it })
@@ -106,9 +108,20 @@ abstract class Player(internal val name: String) {
     fun takeCard(d: Deck) {
         hand.add(d.mainStack.pop())
     }
-    open fun playCard(table: Stack<Card>, card: Card) {
-        table.push(card)
+    open fun playCard(table: Stack<Card>, card: Card): Boolean {
         hand.remove(card)
+        if(table.size > 0) {
+            if ( table.peek().rank == card.rank || table.peek().suit == card.suit) {
+                for (c in table) {
+                    value.add(c)
+                }
+                table.clear()
+                value.add(card)
+                return true
+            }
+        }
+        table.push(card)
+        return false
     }
 }
 
@@ -134,9 +147,10 @@ class Human(name: String): Player(name) {
 }
 class Computer(name: String): Player(name) {
     override fun choseCard(): Card? = hand[0]
-    override fun playCard(table: Stack<Card>, card: Card) {
-        super.playCard(table, card)
+    override fun playCard(table: Stack<Card>, card: Card): Boolean {
+        val result = super.playCard(table, card)
         println("${this.name} plays $card")
+        return result
     }
 }
 
@@ -145,6 +159,7 @@ class Game {
     private val turnSequence: Queue<Player> = LinkedList<Player>()
     private val deck: Deck = Deck()
     private val table: Stack<Card> = Stack<Card>()
+    private var lastWinner: Player? = null
     fun addPlayer(player: Player) {
         players.add(player)
         turnSequence.add(player)
@@ -159,8 +174,16 @@ class Game {
                     players.forEach { it.takeCard(deck) }
                 }
             }
-        } while (playTurn() && table.size < 52)
-        if (table.size == 52) printTableInfo()
+
+        } while (playTurn() && (table.size + players.sumOf { it.value.size }) < 52)
+        if ((table.size + players.sumOf { it.value.size }) == 52) {
+            printTableInfo()
+            if (table.size > 0) {
+                table.forEach { lastWinner?.value?.add(it) }
+                table.clear()
+            }
+            ShowFinalScore()
+        }
         println("Game Over")
     }
 
@@ -171,17 +194,55 @@ class Game {
         return if (card == null) {
             false
         } else {
-            activePlayer.playCard(table, card)
+            if ( activePlayer.playCard(table, card)) {
+                println("${activePlayer.name} wins cards")
+                ShowScore()
+            }
+            lastWinner = activePlayer
             true;
         }
 
     }
 
-    private fun printTableInfo() {
-        println("${table.size} cards on the table, and the top card is ${table.peek()}")
+    private fun ShowScore() {
+        if (players[0] is Human) {
+            println("Score: Player ${players[0].value.sumOf { it.rank.score }} - Computer ${players[1].value.sumOf { it.rank.score }}")
+            println("Cards: Player ${players[0].value.size} - Computer ${players[1].value.size}")
+        } else {
+            println("Score: Player ${players[1].value.sumOf { it.rank.score }} - Computer ${players[0].value.sumOf { it.rank.score }}")
+            println("Cards: Player ${players[1].value.size} - Computer ${players[0].value.size}")
+        }
+
+
     }
 
+    private fun ShowFinalScore() {
+        val c0 = players[0].value.size
+        val c1 = players[1].value.size
+        var s0 = players[0].value.sumOf { it.rank.score }
+        var s1 = players[1].value.sumOf { it.rank.score }
+        if (c1 > c0) {
+            s1 +=3
+        } else {
+            s0 +=3
+        }
+        if (players[0] is Human) {
+            println("Score: Player $s0 - Computer $s1")
+            println("Cards: Player $c0 - Computer $c1")
+        } else {
+            println("Score: Player $s1 - Computer $s0")
+            println("Cards: Player $c1 - Computer $c0")
+        }
 
+    }
+
+    private fun printTableInfo() {
+        if (table.size == 0) {
+            println("No cards on the table")
+        } else {
+            println("${table.size} cards on the table, and the top card is ${table.peek()}")
+        }
+    }
 }
 
 
