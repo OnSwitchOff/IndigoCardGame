@@ -3,13 +3,28 @@ package indigo
 import java.util.*
 import kotlin.random.Random
 
-fun main() {
-    val deck: Deck = Deck()
-    menu(deck)
 
+fun main() {
+    //menu()
+    val game = Game()
+    println("Indigo Card Game")
+    var answer: String = ""
+    do {
+        println("Play first?")
+        answer = readLine()!!.uppercase(Locale.getDefault())
+    } while (answer != "YES" && answer != "NO")
+    if (answer == "YES") {
+        game.addPlayer(Human("Viktor"))
+        game.addPlayer(Computer("Computer"))
+    } else {
+        game.addPlayer(Computer("Computer"))
+        game.addPlayer(Human("Viktor"))
+    }
+    game.start()
 }
 
-fun menu(deck: Deck) {
+fun menu() {
+    val deck: Deck = Deck()
     while (true) {
         println("Choose an action (reset, shuffle, get, exit):")
         when(readLine()!!){
@@ -82,8 +97,99 @@ enum class CardSuit(val sign: Char){
     }
 }
 
+abstract class Player(internal val name: String) {
+    val hand: MutableList<Card> = mutableListOf()
+    abstract fun choseCard():Card?
+    fun showHand(){
+        println(hand.joinToString(" ", prefix = "Cards in hand: "){ (hand.indexOf(it) + 1).toString() + ")" + it })
+    }
+    fun takeCard(d: Deck) {
+        hand.add(d.mainStack.pop())
+    }
+    open fun playCard(table: Stack<Card>, card: Card) {
+        table.push(card)
+        hand.remove(card)
+    }
+}
+
+class Human(name: String): Player(name) {
+    override fun choseCard(): Card? {
+        showHand()
+        while(true) {
+            println("Choose a card to play (1-${hand.size}):")
+            try {
+                val input = readLine()!!
+                if (input == "exit") {
+                    return null
+                }
+                val n = input.toInt()
+                if (n in 1..hand.size) {
+                    return  hand[n - 1]
+                }
+            } catch (e: Exception) {
+
+            }
+        }
+    }
+}
+class Computer(name: String): Player(name) {
+    override fun choseCard(): Card? = hand[0]
+    override fun playCard(table: Stack<Card>, card: Card) {
+        super.playCard(table, card)
+        println("${this.name} plays $card")
+    }
+}
+
+class Game {
+    private val players: MutableList<Player> = mutableListOf()
+    private val turnSequence: Queue<Player> = LinkedList<Player>()
+    private val deck: Deck = Deck()
+    private val table: Stack<Card> = Stack<Card>()
+    fun addPlayer(player: Player) {
+        players.add(player)
+        turnSequence.add(player)
+    }
+    fun start() {
+        deck.getCards(4).forEach { table.push(it) }
+        println(table.joinToString(" ", prefix = "Initial cards on the table: "))
+        do  {
+            printTableInfo()
+            if(players.all { it.hand.size == 0 }) {
+                for (i in 1..6) {
+                    players.forEach { it.takeCard(deck) }
+                }
+            }
+        } while (playTurn() && table.size < 52)
+        if (table.size == 52) printTableInfo()
+        println("Game Over")
+    }
+
+    private fun playTurn(): Boolean {
+        val activePlayer = turnSequence.poll()!!
+        turnSequence.add(activePlayer)
+        val card: Card? = activePlayer.choseCard()
+        return if (card == null) {
+            false
+        } else {
+            activePlayer.playCard(table, card)
+            true;
+        }
+
+    }
+
+    private fun printTableInfo() {
+        println("${table.size} cards on the table, and the top card is ${table.peek()}")
+    }
+
+
+}
+
+
+
+
+
 class Deck {
-    val cards: MutableList<Card> = mutableListOf()
+    private val cards: MutableList<Card> = mutableListOf()
     val mainStack: Stack<Card> = Stack<Card>()
     constructor() {
         generateCards()
@@ -114,16 +220,12 @@ class Deck {
             cards.remove(randomCard)
         }
     }
-    fun getCards(n: Int): String {
-        return if (mainStack.size < n) {
-            "The remaining cards are insufficient to meet the request."
-        } else {
-            val temp: MutableList<Card> = mutableListOf()
-            for (i in 0 until n) {
-                temp.add(mainStack.pop())
-            }
-            temp.joinToString(" ")
+    fun getCards(n: Int): MutableList<Card> {
+        val temp: MutableList<Card> = mutableListOf()
+        for (i in 0 until n) {
+            temp.add(mainStack.pop())
         }
+        return temp
     }
 
     override fun toString(): String = cards.joinToString(" ") { it.toString() }
