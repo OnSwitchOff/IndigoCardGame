@@ -101,7 +101,7 @@ enum class CardSuit(val sign: Char){
 abstract class Player(internal val name: String) {
     val hand: MutableList<Card> = mutableListOf()
     val value: MutableList<Card> = mutableListOf()
-    abstract fun choseCard():Card?
+    abstract fun choseCard(top: Card?):Card?
     fun showHand(){
         println(hand.joinToString(" ", prefix = "Cards in hand: "){ (hand.indexOf(it) + 1).toString() + ")" + it })
     }
@@ -126,7 +126,7 @@ abstract class Player(internal val name: String) {
 }
 
 class Human(name: String): Player(name) {
-    override fun choseCard(): Card? {
+    override fun choseCard(top: Card?): Card? {
         showHand()
         while(true) {
             println("Choose a card to play (1-${hand.size}):")
@@ -146,7 +146,61 @@ class Human(name: String): Player(name) {
     }
 }
 class Computer(name: String): Player(name) {
-    override fun choseCard(): Card? = hand[0]
+    override fun choseCard(top: Card?): Card? {
+        println(hand.joinToString(" "))
+        //1) If there is only one card in hand, put it on the table
+        if (hand.size == 1) {
+            return hand[0]
+        } else {
+            //3) If there are no cards on the table:
+            if (top == null) {
+                val maxS = CardSuit.values().maxOf { s -> hand.count { it.suit == s } }
+                val maxR = CardRank.values().maxOf { r -> hand.count { it.rank == r } }
+                //3.1
+                return if (maxS > 1) {
+                    val temp = CardSuit.values().filter { s -> hand.count { it.suit == s } == maxS }
+                    val candidates = hand.filter { it.suit in temp }
+                    candidates[0]
+                } else if (maxR > 1) {
+                    val temp = CardRank.values().filter { r -> hand.count { it.rank == r } == maxR }
+                    val candidates = hand.filter { it.rank in temp }
+                    candidates[0]
+                } else {
+                    hand[0]
+                }
+            } else {
+                //2) If there is only one candidate card, put it on the table
+                val candidates = hand.filter { it.rank == top.rank || it.suit == top.suit }
+                if (candidates.size == 1) {
+                    return  candidates[0]
+                } else if (candidates.size > 1) {
+                    val suitCand = candidates.filter { it.suit == top.suit }
+                    val rankCand = candidates.filter { it.rank == top.rank }
+                    return if (suitCand.isNotEmpty()) {
+                        suitCand[0]
+                    } else {
+                        rankCand[0]
+                    }
+                } else {
+                    val maxS = CardSuit.values().maxOf { s -> hand.count { it.suit == s } }
+                    val maxR = CardRank.values().maxOf { r -> hand.count { it.rank == r } }
+                    //3.1
+                    return if (maxS > 1) {
+                        val temp = CardSuit.values().filter { s -> hand.count { it.suit == s } == maxS }
+                        val candidates2 = hand.filter { it.suit in temp }
+                        candidates2[0]
+                    } else if (maxR > 1) {
+                        val temp = CardRank.values().filter { r -> hand.count { it.rank == r } == maxR }
+                        val candidates2 = hand.filter { it.rank in temp }
+                        candidates2[0]
+                    } else {
+                        hand[0]
+                    }
+                }
+            }
+        }
+    }
+
     override fun playCard(table: Stack<Card>, card: Card): Boolean {
         val result = super.playCard(table, card)
         println("${this.name} plays $card")
@@ -190,15 +244,19 @@ class Game {
     private fun playTurn(): Boolean {
         val activePlayer = turnSequence.poll()!!
         turnSequence.add(activePlayer)
-        val card: Card? = activePlayer.choseCard()
+        var top: Card? = null
+        if (table.isNotEmpty()) {
+            top = table.peek()
+        }
+        val card: Card? = activePlayer.choseCard(top)
         return if (card == null) {
             false
         } else {
             if ( activePlayer.playCard(table, card)) {
                 println("${activePlayer.name} wins cards")
                 ShowScore()
+                lastWinner = activePlayer
             }
-            lastWinner = activePlayer
             true;
         }
 
